@@ -215,12 +215,29 @@ class Bayes:
             j += 1
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
-        ax.plot(fpr, tpr)
-        ax.scatter(spamPointsSp, spamPointsHm, color='g')
-        ax.scatter(hamPointsSp, hamPointsHm, color='r')
+        ax.set(title='ROC-кривая',
+               xlabel='spam',
+               ylabal='ham')
+        ax.legend(fontsize=20,
+                  ncol=2)
+        ax.plot(fpr, tpr, color='black')
+        ax.scatter(spamPointsSp, spamPointsHm, color='green', label='spam')
+        ax.scatter(hamPointsSp, hamPointsHm, color='red', label='ham')
+        plt.show()
 
     def getHeuristic(self):
-        return 0
+        isGoodHeuristic = False
+        penaltyForHam = 1
+        penaltyStep = 0.2
+        penaltyValues = []
+        accuracyPoints = []
+        while not isGoodHeuristic:
+            for i in range(self.BLOCK_QUANTITY):
+                for letter in self.DATASETS[i]:
+                    type = "spam" if letter.isSpam else "ham"
+                    subject, text = getLetterNgram(self.bestClassifier.nGramSize, letter)
+                    predicted = self.bestClassifier.advancedClassifier(1, penaltyForHam, subject + text)
+
 
 
 b = Bayes()
