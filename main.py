@@ -1,5 +1,7 @@
 import math
 
+import numpy
+
 import Letter
 import Utils
 import matplotlib.pyplot as plt
@@ -98,13 +100,12 @@ class Classifier:
         return "spam" if isSpam >= isHam else "ham"
 
     # метод-классификатор с аргументом penaltyForHam
-    def advancedClassifier(self, letter, spamPenalty, hamPenalty):
-        ngramLetter = getNgram(letter, self.nGramSize)
-        isSpam = math.log1p(self.spamQuantity / len(self.distribution))
-        isHam = math.log1p(self.hamQuantity / len(self.distribution))
+    def advancedClassifier(self, lettersNgram, spamPenalty, hamPenalty):
         # compute ham probability
+        isSpam = math.log1p(self.spamQuantity / len(self.distribution))
         # compute span probability
-        for nGrama in ngramLetter:
+        isHam = math.log1p(self.hamQuantity / len(self.distribution))
+        for nGrama in lettersNgram:
             isSpam += spamPenalty * math.log1p(self.getWordProbability(nGrama, "spam"))
             isHam += hamPenalty * math.log1p(self.getWordProbability(nGrama, "ham"))
         return "spam" if isSpam >= isHam else "ham"
@@ -197,10 +198,9 @@ class Bayes:
                 else:
                     ham += 1
                 idx += 1
-        # objects.sort(key=lambda x: x.isHam if x.predicted == "ham" else (1 - x.isSpam)/spam,
+        # objects.sort(key=lambda x: x.isHam if x.predicted == "ham" else (1 - x.isSpam) / spam,
         #              reverse=True)  # строю ROC по принадлежности письма к классу HAM
-        objects.sort(key=lambda x: max(x.isHam, x.isSpam),
-                     reverse=True)
+        objects.sort(key=lambda x: x.isHam - x.isSpam, reverse=True)
         print(spam, ham)
         fpr, tpr, j = [0], [0], 0
         for i in range(spam + ham):
@@ -223,7 +223,7 @@ class Bayes:
 
     def getHeuristic(self):
         penaltyForHam = 1
-        penaltyStep = 0.02
+        penaltyStep = 0.01
         penaltyValues = []
         accuracyPoints = []
         isGoodHeuristic = False
@@ -231,7 +231,9 @@ class Bayes:
             isAllGood = True
             penaltyValues.append(penaltyForHam)
             accuracy = 0
+            size = 0
             for i in range(self.BLOCK_QUANTITY):
+                size += len(self.DATASETS[i])
                 for letter in self.DATASETS[i]:
                     type = "spam" if letter.isSpam else "ham"
                     subject, text = getLetterNgram(self.bestClassifier.nGramSize, letter)
@@ -240,11 +242,13 @@ class Bayes:
                         accuracy += 1
                     elif type == "ham" and type != predicted:
                         isAllGood = False
-                accuracyPoints.append(accuracy)
-                if not isAllGood:
-                    penaltyForHam += penaltyStep
-                else:
-                    isGoodHeuristic = True
+            accuracyPoints.append(accuracy / size * 100)
+            if not isAllGood:
+                penaltyForHam += penaltyStep
+            else:
+                isGoodHeuristic = True
+        print(penaltyValues)
+        print(accuracyPoints)
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.set(title='Зависимость от эвристики',
                xlabel='Penalty',
@@ -258,5 +262,5 @@ class Bayes:
 b = Bayes()
 b.bayes()
 b.printResults()
-b.plotRoc()
+#b.plotRoc()
 b.getHeuristic()
