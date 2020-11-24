@@ -262,5 +262,5 @@ class Bayes:
 b = Bayes()
 b.bayes()
 b.printResults()
-#b.plotRoc()
+b.plotRoc()
 b.getHeuristic()
