@@ -2,7 +2,6 @@ import math
 
 import Letter
 import Utils
-import numpy as np
 import matplotlib.pyplot as plt
 
 
@@ -10,14 +9,8 @@ def getNgram(arr, n):
     return list(zip(*[arr[i:] for i in range(n)]))
 
 
-def concatGram(gramma):
-    if len(gramma) == 1:
-        return str(gramma[0])
-    return ' '.join(map(str, gramma))
-
-
 def generateCountMap(ngrams):
-    nmaps = {}  # n-грамма | сколько раза было в спаме | сколько раз была в нормальном письме
+    nmaps = {}  # n-грамма | сколько раза была в спаме | сколько раз была в нормальном письме
     spamCounter, hamCounter = 0, 0
     for ngram in ngrams:  # каждая n-грама - это Letter, обработанный как n-грамма
         tmpMap = {}
@@ -27,25 +20,34 @@ def generateCountMap(ngrams):
         else:
             hamCounter += 1
         for gramma in tmpList:
-            cGramma = concatGram(gramma)
-            if cGramma not in tmpMap:
-                if cGramma in nmaps:
+            if gramma not in tmpMap:
+                if gramma in nmaps:
                     if ngram.isSpam:
-                        nmaps[cGramma] = (nmaps[cGramma][0] + 1, nmaps[cGramma][1])
+                        nmaps[gramma] = (nmaps[gramma][0] + 1, nmaps[gramma][1])
                     else:
-                        nmaps[cGramma] = (nmaps[cGramma][0], nmaps[cGramma][1] + 1)
+                        nmaps[gramma] = (nmaps[gramma][0], nmaps[gramma][1] + 1)
                 else:
                     if ngram.isSpam:
-                        nmaps[cGramma] = (1, 0)
+                        nmaps[gramma] = (1, 0)
                     else:
-                        nmaps[cGramma] = (0, 1)
-            tmpMap[cGramma] = True
-
+                        nmaps[gramma] = (0, 1)
+            tmpMap[gramma] = True
+    # if spamCounter == 0 and hamCounter == 0:
+    #     f = open("shit.txt", 'w')
+    #     for ngram in ngrams:
+    #         f.write(str(ngram.subject) + '\n')
+    #         f.write(str(ngram.letter) + '\n')
+    #         f.write(str(ngram.isSpam) + '\n')
+    #     f.close()
+    #     exit(1)
     return spamCounter, hamCounter, nmaps
 
 
 def copyClassifier(classifierFrom, classifierTo, accuracy):
-    classifierTo.distribution = classifierFrom.distribution
+    classifierTo.spamQuantity = classifierFrom.spamQuantity
+    classifierTo.hamQuantity = classifierFrom.hamQuantity
+    classifierTo.distribution = classifierFrom.distribution.copy()
+    classifierTo.corpusSize = classifierFrom.corpusSize
     classifierTo.nGramSize = classifierFrom.nGramSize
     classifierTo.alpha = classifierFrom.alpha
     classifierTo.accuracy = accuracy
@@ -65,12 +67,12 @@ class Classifier:
         self.distribution = distribution
         self.spamQuantity = spamCounter
         self.hamQuantity = hamCounter
-        self.corpusSize = sum([x[1][0] + x[1][1] for x in self.distribution.items()])
+        self.corpusSize = sum([x[1][0] + x[1][1] for x in distribution.items()])
         self.accuracy = accuracy
         self.Q = 2  # spam or not to spam
 
     def getWordProbability(self, nGram, predictionType):
-        quantity = self.distribution.get(concatGram(nGram))
+        quantity = self.distribution.get(nGram)
         if quantity is None:
             quantity = (0, 0)
         probability = 0
@@ -78,7 +80,6 @@ class Classifier:
             probability = (quantity[0] + self.alpha) / (self.corpusSize + self.alpha * self.Q)
         elif predictionType == "ham":
             probability = (quantity[1] + self.alpha) / (self.corpusSize + self.alpha * self.Q)
-
         return probability
 
     def getLetterProbability(self, lettersNgram):
@@ -90,8 +91,8 @@ class Classifier:
             isSpam += math.log1p(self.getWordProbability(nGrama, "spam"))
             isHam += math.log1p(self.getWordProbability(nGrama, "ham"))
         return isSpam, isHam
-        # метод-классификатор
 
+    # метод-классификатор
     def classifier(self, lettersNgram):
         isSpam, isHam = self.getLetterProbability(lettersNgram)
         return "spam" if isSpam >= isHam else "ham"
@@ -166,7 +167,6 @@ class Bayes:
                 if type == predicted:
                     totalAccuracy += 1
         totalAccuracy = totalAccuracy / totalSize * 100
-        #  print(totalAccuracy, totalSize)
         self.bestClassifier.accuracy = totalAccuracy
 
     def printResults(self):
@@ -175,38 +175,36 @@ class Bayes:
         f.close()
 
     class Point:
-        def __init__(self, number, isSpam, isHam, type):
+        def __init__(self, number, isSpam, isHam, predicted, type):
             self.number = number
             self.isSpam = isSpam
             self.isHam = isHam
+            self.predicted = predicted
             self.type = type
 
     def plotRoc(self):
         idx = 0
         objects = []
-        spamPointsSp = []
-        spamPointsHm = []
-        hamPointsSp = []
-        hamPointsHm = []
         spam, ham = 0, 0
         for i in range(self.BLOCK_QUANTITY):
             for letter in self.DATASETS[i]:
                 subject, text = getLetterNgram(self.bestClassifier.nGramSize, letter)
                 isSpam, isHam = self.bestClassifier.getLetterProbability(subject + text)
-                objects.append(self.Point(idx, math.exp(isSpam), math.exp(isHam), letter.isSpam))
+                predicted = "spam" if isSpam > isHam else "ham"
+                objects.append(self.Point(idx, isSpam, isHam, predicted, letter.isSpam))
                 if letter.isSpam:
-                    spamPointsSp.append(objects[idx].isSpam)
-                    spamPointsHm.append(objects[idx].isHam)
                     spam += 1
                 else:
-                    hamPointsSp.append(objects[idx].isSpam)
-                    hamPointsHm.append(objects[idx].isHam)
                     ham += 1
                 idx += 1
-        sorted(objects, key=lambda x: max(x.isSpam, x.isHam), reverse=True)
+        # objects.sort(key=lambda x: x.isHam if x.predicted == "ham" else (1 - x.isSpam)/spam,
+        #              reverse=True)  # строю ROC по принадлежности письма к классу HAM
+        objects.sort(key=lambda x: max(x.isHam, x.isSpam),
+                     reverse=True)
+        print(spam, ham)
         fpr, tpr, j = [0], [0], 0
         for i in range(spam + ham):
-            if objects[i].isSpam:
+            if objects[i].type:  # spam == True
                 fpr.append(fpr[j] + 1 / spam)
                 tpr.append(tpr[j])
             else:
@@ -216,28 +214,45 @@ class Bayes:
 
         fig, ax = plt.subplots(nrows=1, ncols=1)
         ax.set(title='ROC-кривая',
-               xlabel='spam',
-               ylabal='ham')
-        ax.legend(fontsize=20,
-                  ncol=2)
-        ax.plot(fpr, tpr, color='black')
-        ax.scatter(spamPointsSp, spamPointsHm, color='green', label='spam')
-        ax.scatter(hamPointsSp, hamPointsHm, color='red', label='ham')
+               xlabel='False positive',
+               ylabel='True positive')
+
+        ax.plot(fpr, tpr, color='red')
         plt.show()
+        fig.savefig("ROC-кривая")
 
     def getHeuristic(self):
-        isGoodHeuristic = False
         penaltyForHam = 1
-        penaltyStep = 0.2
+        penaltyStep = 0.02
         penaltyValues = []
         accuracyPoints = []
+        isGoodHeuristic = False
         while not isGoodHeuristic:
+            isAllGood = True
+            penaltyValues.append(penaltyForHam)
+            accuracy = 0
             for i in range(self.BLOCK_QUANTITY):
                 for letter in self.DATASETS[i]:
                     type = "spam" if letter.isSpam else "ham"
                     subject, text = getLetterNgram(self.bestClassifier.nGramSize, letter)
-                    predicted = self.bestClassifier.advancedClassifier(1, penaltyForHam, subject + text)
+                    predicted = self.bestClassifier.advancedClassifier(subject + text, 1, penaltyForHam)
+                    if type == predicted:
+                        accuracy += 1
+                    elif type == "ham" and type != predicted:
+                        isAllGood = False
+                accuracyPoints.append(accuracy)
+                if not isAllGood:
+                    penaltyForHam += penaltyStep
+                else:
+                    isGoodHeuristic = True
+        fig, ax = plt.subplots(nrows=1, ncols=1)
+        ax.set(title='Зависимость от эвристики',
+               xlabel='Penalty',
+               ylabel='Accuracy')
 
+        ax.plot(penaltyValues, accuracyPoints, color='red')
+        plt.show()
+        fig.savefig("Зависимость от эвристики")
 
 
 b = Bayes()
